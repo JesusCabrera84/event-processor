@@ -6,7 +6,18 @@ use uuid::Uuid;
 use crate::evaluators::{Evaluator, EvaluatorContext};
 use crate::models::{Event, EventTypeRegistry, IncomingMessage};
 
-const HANDLED: &[&str] = &["Engine ON", "Engine OFF"];
+// Canonicalize incoming alert text to a supported, canonical event name.
+// Add aliases here (e.g. map "Turn Off" -> "Engine OFF") so they're
+// easy to find and remove later.
+fn canonical_alert(input: Option<&str>) -> Option<&'static str> {
+    match input.map(|s| s.trim()) {
+        Some(s) if s.eq_ignore_ascii_case("engine on") => Some("Engine ON"),
+        Some(s) if s.eq_ignore_ascii_case("engine off") => Some("Engine OFF"),
+        Some(s) if s.eq_ignore_ascii_case("turn off") => Some("Engine OFF"),
+        Some(s) if s.eq_ignore_ascii_case("turn on") => Some("Engine ON"),
+        _ => None,
+    }
+}
 
 pub struct IgnitionEvaluator {
     engine_on_id: Uuid,
@@ -35,7 +46,7 @@ impl Evaluator for IgnitionEvaluator {
     }
 
     fn can_handle(&self, msg: &IncomingMessage) -> bool {
-        msg.routing_key() == "ALERT" && HANDLED.contains(&msg.alert.as_deref().unwrap_or(""))
+        msg.routing_key() == "ALERT" && canonical_alert(msg.alert.as_deref()).is_some()
     }
 
     fn process<'a>(
@@ -44,7 +55,7 @@ impl Evaluator for IgnitionEvaluator {
         context: &'a EvaluatorContext,
     ) -> BoxFuture<'a, Option<Vec<Event>>> {
         Box::pin(async move {
-            let event_type_id = match msg.alert.as_deref() {
+            let event_type_id = match canonical_alert(msg.alert.as_deref()) {
                 Some("Engine ON") => self.engine_on_id,
                 Some("Engine OFF") => self.engine_off_id,
                 _ => return None,
