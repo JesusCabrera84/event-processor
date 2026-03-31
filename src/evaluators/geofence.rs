@@ -4,8 +4,6 @@ use uuid::Uuid;
 use crate::evaluators::{Evaluator, EvaluatorContext};
 use crate::models::{Event, EventTypeRegistry, IncomingMessage};
 
-const HANDLED: &[&str] = &[];
-
 pub struct GeofenceEvaluator {
     event_type_id: Option<Uuid>,
 }
@@ -21,10 +19,6 @@ impl GeofenceEvaluator {
 impl Evaluator for GeofenceEvaluator {
     fn name(&self) -> &'static str {
         "geofence"
-    }
-
-    fn handled_codes(&self) -> &'static [&'static str] {
-        HANDLED
     }
 
     fn can_handle(&self, _msg: &IncomingMessage) -> bool {

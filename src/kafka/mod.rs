@@ -110,7 +110,10 @@ pub async fn run_consumer(
                 .sum::<usize>();
 
             if uncommitted_offsets > 0 {
-                warn!(uncommitted_offsets, "stopping kafka consumer with uncommitted failed offsets");
+                warn!(
+                    uncommitted_offsets,
+                    "stopping kafka consumer with uncommitted failed offsets"
+                );
             }
 
             break;

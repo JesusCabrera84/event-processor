@@ -22,7 +22,10 @@ impl IgnitionEvaluator {
             .get("Engine OFF")
             .ok_or_else(|| anyhow!("event_type 'Engine OFF' not found in registry"))?;
 
-        Ok(Self { engine_on_id, engine_off_id })
+        Ok(Self {
+            engine_on_id,
+            engine_off_id,
+        })
     }
 }
 
@@ -31,13 +34,8 @@ impl Evaluator for IgnitionEvaluator {
         "ignition"
     }
 
-    fn handled_codes(&self) -> &'static [&'static str] {
-        HANDLED
-    }
-
     fn can_handle(&self, msg: &IncomingMessage) -> bool {
-        msg.routing_key() == "ALERT"
-            && HANDLED.contains(&msg.alert.as_deref().unwrap_or(""))
+        msg.routing_key() == "ALERT" && HANDLED.contains(&msg.alert.as_deref().unwrap_or(""))
     }
 
     fn process<'a>(

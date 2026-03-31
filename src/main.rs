@@ -42,7 +42,10 @@ async fn main() -> Result<()> {
     tracing::info!(count = event_types.len(), "event_types registry loaded");
 
     let unit_devices = Arc::new(UnitDeviceResolver::load(db.clone()).await?);
-    tracing::info!(count = unit_devices.len().await, "unit_devices registry loaded");
+    tracing::info!(
+        count = unit_devices.len().await,
+        "unit_devices registry loaded"
+    );
     let evaluator_context = Arc::new(EvaluatorContext::new(unit_devices));
 
     let db_breaker = Arc::new(CircuitBreaker::new(
@@ -112,7 +115,10 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn await_result_task_shutdown<T>(name: &str, handle: &mut JoinHandle<Result<T>>) -> Result<()> {
+async fn await_result_task_shutdown<T>(
+    name: &str,
+    handle: &mut JoinHandle<Result<T>>,
+) -> Result<()> {
     let timeout = tokio::time::sleep(Duration::from_secs(5));
     tokio::pin!(timeout);
 

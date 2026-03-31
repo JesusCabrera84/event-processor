@@ -16,7 +16,11 @@ pub struct IncomingMessage {
     pub msg_class: String,
     #[serde(default)]
     pub alert: Option<String>,
-    #[serde(default, alias = "fixStatus", deserialize_with = "deserialize_string_like_opt")]
+    #[serde(
+        default,
+        alias = "fixStatus",
+        deserialize_with = "deserialize_string_like_opt"
+    )]
     pub fix_status: Option<String>,
     #[serde(default, alias = "gpsEpoch", deserialize_with = "deserialize_i64_opt")]
     pub gps_epoch: Option<i64>,
@@ -86,7 +90,8 @@ impl IncomingMessage {
             }
         }
 
-        self.received_at.unwrap_or_else(|| self.effective_occurred_at())
+        self.received_at
+            .unwrap_or_else(|| self.effective_occurred_at())
     }
 
     pub fn source_epoch(&self) -> Option<i64> {
@@ -116,7 +121,10 @@ impl IncomingMessage {
             }
         }
 
-        payload.insert("msg_class".to_string(), Value::String(self.msg_class.clone()));
+        payload.insert(
+            "msg_class".to_string(),
+            Value::String(self.msg_class.clone()),
+        );
 
         if let Some(fix_status) = &self.fix_status {
             payload.insert("fix_status".to_string(), Value::String(fix_status.clone()));
@@ -195,10 +203,9 @@ where
                 return Ok(None);
             }
 
-            trimmed
-                .parse::<f64>()
-                .map(Some)
-                .map_err(|error| de::Error::custom(format!("invalid float value '{trimmed}': {error}")))
+            trimmed.parse::<f64>().map(Some).map_err(|error| {
+                de::Error::custom(format!("invalid float value '{trimmed}': {error}"))
+            })
         }
         Some(other) => Err(de::Error::custom(format!(
             "unsupported float format: {other}"
@@ -224,10 +231,9 @@ where
                 return Ok(None);
             }
 
-            trimmed
-                .parse::<i64>()
-                .map(Some)
-                .map_err(|error| de::Error::custom(format!("invalid integer value '{trimmed}': {error}")))
+            trimmed.parse::<i64>().map(Some).map_err(|error| {
+                de::Error::custom(format!("invalid integer value '{trimmed}': {error}"))
+            })
         }
         Some(other) => Err(de::Error::custom(format!(
             "unsupported integer format: {other}"
@@ -296,7 +302,10 @@ mod tests {
         let parsed: IncomingMessage = serde_json::from_str(payload).expect("message should parse");
 
         assert_eq!(parsed.source_epoch(), Some(1700000000));
-        assert_eq!(parsed.event_occurred_at(), Utc.timestamp_opt(1_700_000_000, 0).single().unwrap());
+        assert_eq!(
+            parsed.event_occurred_at(),
+            Utc.timestamp_opt(1_700_000_000, 0).single().unwrap()
+        );
     }
 
     #[test]

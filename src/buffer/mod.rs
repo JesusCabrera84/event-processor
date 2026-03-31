@@ -74,13 +74,13 @@ async fn flush_pending(
             pending_messages = pending.len(),
             "database circuit breaker is open; deferring commits"
         );
-        fail_pending(completion_tx, pending.drain(..).collect()).await;
+        fail_pending(completion_tx, std::mem::take(pending)).await;
         *buffered_events = 0;
         health.mark_db_error();
         return;
     }
 
-    let drained: Vec<PersistRequest> = pending.drain(..).collect();
+    let drained: Vec<PersistRequest> = std::mem::take(pending);
     let event_count = drained
         .iter()
         .map(|request| request.events.len())

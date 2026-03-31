@@ -108,7 +108,9 @@ impl Database {
         Ok(registry)
     }
 
-    pub async fn load_unit_devices(&self) -> Result<std::collections::HashMap<String, Uuid>, sqlx::Error> {
+    pub async fn load_unit_devices(
+        &self,
+    ) -> Result<std::collections::HashMap<String, Uuid>, sqlx::Error> {
         let rows = sqlx::query("SELECT unit_id, device_id FROM unit_devices")
             .fetch_all(&self.pool)
             .await?;
@@ -125,7 +127,10 @@ impl Database {
         Ok(registry)
     }
 
-    pub async fn find_unit_id_by_device(&self, device_id: &str) -> Result<Option<Uuid>, sqlx::Error> {
+    pub async fn find_unit_id_by_device(
+        &self,
+        device_id: &str,
+    ) -> Result<Option<Uuid>, sqlx::Error> {
         let row = sqlx::query("SELECT unit_id, device_id FROM unit_devices WHERE device_id = $1")
             .bind(device_id)
             .fetch_optional(&self.pool)

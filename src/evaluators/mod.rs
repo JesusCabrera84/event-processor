@@ -27,7 +27,6 @@ impl EvaluatorContext {
 
 pub trait Evaluator: Send + Sync {
     fn name(&self) -> &'static str;
-    fn handled_codes(&self) -> &'static [&'static str];
     fn can_handle(&self, msg: &IncomingMessage) -> bool;
     fn process<'a>(
         &'a self,
