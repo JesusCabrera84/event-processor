@@ -36,7 +36,6 @@ async fn main() -> Result<()> {
     init_tracing(&config.app.log_level)?;
 
     let db = Arc::new(Database::connect(&config.postgres).await?);
-    db.initialize_schema().await?;
 
     let event_types = db.load_event_types().await?;
     tracing::info!(count = event_types.len(), "event_types registry loaded");

@@ -24,47 +24,6 @@ impl Database {
         Ok(Self { pool })
     }
 
-    pub async fn initialize_schema(&self) -> Result<(), sqlx::Error> {
-        sqlx::query(
-            r#"
-            CREATE TABLE IF NOT EXISTS events (
-                id BIGSERIAL PRIMARY KEY,
-                source_type TEXT NOT NULL,
-                source_id TEXT NOT NULL,
-                source_message_id UUID NULL,
-                unit_id UUID NULL,
-                event_type_id UUID NOT NULL,
-                payload JSONB NOT NULL,
-                occurred_at TIMESTAMPTZ NOT NULL,
-                source_epoch BIGINT NULL,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            )
-            "#,
-        )
-        .execute(&self.pool)
-        .await?;
-
-        sqlx::query("CREATE INDEX IF NOT EXISTS events_occurred_at_idx ON events (occurred_at)")
-            .execute(&self.pool)
-            .await?;
-
-        sqlx::query("ALTER TABLE events ADD COLUMN IF NOT EXISTS source_message_id UUID NULL")
-            .execute(&self.pool)
-            .await?;
-
-        sqlx::query(
-            r#"
-            ALTER TABLE events
-            ALTER COLUMN source_id TYPE TEXT
-            USING source_id::TEXT
-            "#,
-        )
-        .execute(&self.pool)
-        .await?;
-
-        Ok(())
-    }
-
     pub async fn insert_events(&self, events: &[Event]) -> Result<PgQueryResult, sqlx::Error> {
         let mut query_builder = QueryBuilder::<Postgres>::new(
             "INSERT INTO events (source_type, source_id, source_message_id, unit_id, event_type_id, payload, occurred_at, source_epoch) ",
