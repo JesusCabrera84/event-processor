@@ -33,6 +33,14 @@ pub struct KafkaConfig {
     pub security_protocol: Option<String>,
     pub enable_auto_commit: bool,
     pub auto_offset_reset: String,
+
+    // Optional producer-specific overrides (different user/topic)
+    pub producer_brokers: Option<String>,
+    pub producer_topic: Option<String>,
+    pub producer_sasl_mechanism: Option<String>,
+    pub producer_username: Option<String>,
+    pub producer_password: Option<String>,
+    pub producer_security_protocol: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -76,6 +84,12 @@ impl AppConfig {
                 security_protocol: optional_var("KAFKA_SECURITY_PROTOCOL"),
                 enable_auto_commit: parse_var_with_default("KAFKA_ENABLE_AUTO_COMMIT", false)?,
                 auto_offset_reset: var_with_default("KAFKA_AUTO_OFFSET_RESET", "latest"),
+                producer_brokers: optional_var("KAFKA_BROKERS"),
+                producer_topic: optional_var("KAFKA_PRODUCER_TOPIC"),
+                producer_sasl_mechanism: optional_var("KAFKA_SASL_MECHANISM"),
+                producer_username: optional_var("KAFKA_PRODUCER_USERNAME"),
+                producer_password: optional_var("KAFKA_PRODUCER_PASSWORD"),
+                producer_security_protocol: optional_var("KAFKA_SECURITY_PROTOCOL"),
             },
             app: RuntimeConfig {
                 log_level: var_with_default("LOG_LEVEL", "info"),

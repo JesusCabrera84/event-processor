@@ -8,6 +8,7 @@ mod health;
 mod kafka;
 mod models;
 mod unit_devices;
+mod processors;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -40,6 +41,14 @@ async fn main() -> Result<()> {
     let event_types = db.load_event_types().await?;
     tracing::info!(count = event_types.len(), "event_types registry loaded");
 
+    // invert registry for id -> code lookup used when producing events to Kafka
+    let event_type_lookup = Arc::new(
+        event_types
+            .iter()
+            .map(|(code, id)| (*id, code.clone()))
+            .collect::<std::collections::HashMap<uuid::Uuid, String>>(),
+    );
+
     let unit_devices = Arc::new(UnitDeviceResolver::load(db.clone()).await?);
     tracing::info!(
         count = unit_devices.len().await,
@@ -58,6 +67,15 @@ async fn main() -> Result<()> {
         config.app.circuit_breaker_reset_timeout,
     ));
     let health = Arc::new(HealthTracker::default());
+
+    // Kafka producer (may use producer-specific credentials/topic)
+    let producer_opt = match crate::processors::producer::ProducerService::new(&config.kafka) {
+        Ok(p) => Some(Arc::new(p)),
+        Err(err) => {
+            tracing::warn!(error=%err, "failed to create kafka producer; kafka production disabled");
+            None
+        }
+    };
 
     let channel_capacity = (config.app.batch_size * 4).max(1024);
     let (process_tx, process_rx) = mpsc::channel::<ProcessEnvelope>(channel_capacity);
@@ -91,6 +109,8 @@ async fn main() -> Result<()> {
         health.clone(),
         persist_rx,
         completion_tx.clone(),
+        producer_opt.clone(),
+        Some(event_type_lookup.clone()),
     );
     let mut consumer_handle = tokio::spawn(run_consumer(
         config.kafka.clone(),

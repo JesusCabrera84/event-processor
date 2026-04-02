@@ -130,14 +130,46 @@ impl IncomingMessage {
             payload.insert("fix_status".to_string(), Value::String(fix_status.clone()));
         }
 
-        for key in [
-            "stellites",
-            "engine_status",
-            "main_battery_voltage",
-            "backup_batery_voltage",
-        ] {
+        for key in ["engine_status", "main_battery_voltage", "backup_batery_voltage"] {
             if let Some(value) = self.extra.get(key) {
                 payload.insert(key.to_string(), value.clone());
+            }
+        }
+
+        // Normalize satellites field: accept both misspelled `stellites` and `satellites`,
+        // prefer numeric representation when possible and expose as `satellites`.
+        for key in ["stellites", "satellites"] {
+            if let Some(value) = self.extra.get(key) {
+                match value {
+                    Value::Number(n) => {
+                        payload.insert("satellites".to_string(), Value::Number(n.clone()));
+                        break;
+                    }
+                    Value::String(s) => {
+                        let trimmed = s.trim();
+                        if let Ok(i) = trimmed.parse::<i64>() {
+                            payload.insert(
+                                "satellites".to_string(),
+                                Value::Number(serde_json::Number::from(i)),
+                            );
+                            break;
+                        }
+
+                        if let Ok(f) = trimmed.parse::<f64>() {
+                            if let Some(num) = serde_json::Number::from_f64(f) {
+                                payload.insert("satellites".to_string(), Value::Number(num));
+                                break;
+                            }
+                        }
+
+                        payload.insert("satellites".to_string(), Value::String(trimmed.to_string()));
+                        break;
+                    }
+                    other => {
+                        payload.insert("satellites".to_string(), other.clone());
+                        break;
+                    }
+                }
             }
         }
 
@@ -349,7 +381,7 @@ mod tests {
         assert!(object.contains_key("latitude"));
         assert!(object.contains_key("longitude"));
         assert!(object.contains_key("msg_class"));
-        assert!(object.contains_key("stellites"));
+        assert!(object.contains_key("satellites"));
         assert!(object.contains_key("fix_status"));
         assert!(object.contains_key("engine_status"));
         assert!(object.contains_key("main_battery_voltage"));

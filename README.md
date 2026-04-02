@@ -194,3 +194,15 @@ El workflow realiza en orden:
 5. Verifica el health endpoint antes de considerar el deploy exitoso
 
 Para ver los secretos y variables de entorno requeridos en GitHub, consulta el workflow en [.github/workflows/docker-build.yml](.github/workflows/docker-build.yml).
+
+## New: Event Producer (unit-events)
+
+This repository now includes a small, production-ready Kafka producer service located in `src/processors`.
+
+- `src/processors/event_processor.rs`: strongly-typed `Event` model matching the requested JSON schema and a `from_incoming` mapper from `IncomingMessage`.
+- `src/processors/producer.rs`: `ProducerService` wraps an `rdkafka` `FutureProducer` with idempotence, `acks=all` and very high retries. It serializes `Event` to JSON and sends to topic `unit-events`, using `event_id` as key. Retries use exponential backoff and errors are logged.
+- `src/processors/outbox.rs`: lightweight `OutboxEvent` model and `OutboxRepository` trait to prepare for a future Outbox Pattern (TODO hook is present in the producer flow).
+
+Example usage: `cargo run --example produce_example` will build a dummy `IncomingMessage`, map it to `Event` and publish to Kafka using environment variables from `.env`.
+
+See `.env.example` for the required connection variables.

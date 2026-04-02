@@ -98,6 +98,7 @@ pub async fn run_consumer(
 ) -> Result<()> {
     let consumer = build_consumer(&config)?;
     consumer.subscribe(&[&config.topic])?;
+    tracing::info!(brokers = %config.brokers, topic = %config.topic, group_id = %config.group_id, "kafka consumer started");
 
     let mut partition_states: HashMap<TopicPartition, PartitionState> = HashMap::new();
     let mut shutting_down = false;
@@ -172,6 +173,8 @@ pub async fn run_consumer(
 
 fn build_consumer(config: &KafkaConfig) -> Result<StreamConsumer> {
     let mut client = ClientConfig::new();
+    // Distinguish consumer client in broker logs and librdkafka messages
+    client.set("client.id", "event-processor-consumer");
     client
         .set("bootstrap.servers", &config.brokers)
         .set("group.id", &config.group_id)
