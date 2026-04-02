@@ -40,12 +40,16 @@ pub struct Unit {
 
 impl Event {
     /// Transform an IncomingMessage into an Event ready to be produced.
+    #[allow(dead_code)]
     pub fn from_incoming(msg: &IncomingMessage) -> Self {
         let event_id = Uuid::new_v4();
         let received_at = Utc::now();
 
         let message_id = msg.message_id.unwrap_or_else(Uuid::new_v4);
-        let source_id = msg.device_id.clone().unwrap_or_else(|| msg.device_source_id());
+        let source_id = msg
+            .device_id
+            .clone()
+            .unwrap_or_else(|| msg.device_source_id());
 
         let unit_id = msg.unit_id.unwrap_or_else(Uuid::new_v4);
 

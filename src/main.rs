@@ -7,8 +7,8 @@ mod evaluators;
 mod health;
 mod kafka;
 mod models;
-mod unit_devices;
 mod processors;
+mod unit_devices;
 
 use std::sync::Arc;
 use std::time::Duration;

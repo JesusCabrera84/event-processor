@@ -130,7 +130,11 @@ impl IncomingMessage {
             payload.insert("fix_status".to_string(), Value::String(fix_status.clone()));
         }
 
-        for key in ["engine_status", "main_battery_voltage", "backup_batery_voltage"] {
+        for key in [
+            "engine_status",
+            "main_battery_voltage",
+            "backup_batery_voltage",
+        ] {
             if let Some(value) = self.extra.get(key) {
                 payload.insert(key.to_string(), value.clone());
             }
@@ -162,7 +166,8 @@ impl IncomingMessage {
                             }
                         }
 
-                        payload.insert("satellites".to_string(), Value::String(trimmed.to_string()));
+                        payload
+                            .insert("satellites".to_string(), Value::String(trimmed.to_string()));
                         break;
                     }
                     other => {

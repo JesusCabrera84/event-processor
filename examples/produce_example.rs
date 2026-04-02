@@ -1,12 +1,11 @@
 use anyhow::Result;
 use dotenvy::dotenv;
-use tokio;
 use uuid::Uuid;
 
 use event_processor::config::AppConfig;
+use event_processor::models::IncomingMessage;
 use event_processor::processors::event_processor::Event;
 use event_processor::processors::producer::ProducerService;
-use event_processor::models::IncomingMessage;
 
 #[tokio::main]
 async fn main() -> Result<()> {

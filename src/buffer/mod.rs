@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::sync::mpsc;
 use std::collections::HashMap;
+use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio::time::{self, MissedTickBehavior};
 use tracing::{error, info, warn};
@@ -11,11 +11,14 @@ use crate::circuit_breaker::CircuitBreaker;
 use crate::db::Database;
 use crate::health::HealthTracker;
 use crate::models::{CompletionStatus, Event as ModelEvent, PersistRequest};
+use crate::processors::event_processor::{
+    Event as KafkaEvent, Source as KafkaSource, Unit as KafkaUnit,
+};
 use crate::processors::producer::ProducerService;
-use crate::processors::event_processor::{Event as KafkaEvent, Source as KafkaSource, Unit as KafkaUnit};
 use chrono::Utc;
 use uuid::Uuid;
 
+#[allow(clippy::too_many_arguments)]
 pub fn spawn_buffer_writer(
     batch_size: usize,
     batch_timeout: Duration,
@@ -64,6 +67,7 @@ pub fn spawn_buffer_writer(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn flush_pending(
     db: &Database,
     db_breaker: &CircuitBreaker,
@@ -145,7 +149,9 @@ async fn flush_pending(
                                 id: ev.source_id.clone(),
                                 message_id: ev.source_message_id.unwrap_or_else(Uuid::new_v4),
                             },
-                            unit: KafkaUnit { id: ev.unit_id.unwrap_or_else(Uuid::new_v4) },
+                            unit: KafkaUnit {
+                                id: ev.unit_id.unwrap_or_else(Uuid::new_v4),
+                            },
                             source_epoch: ev.source_epoch,
                             occurred_at: ev.occurred_at,
                             received_at: Utc::now(),
@@ -155,7 +161,10 @@ async fn flush_pending(
                         producer.produce_event(kafka_event).await;
                     });
                 }
-                info!(kafka_produced = event_count, "enqueued events for kafka production");
+                info!(
+                    kafka_produced = event_count,
+                    "enqueued events for kafka production"
+                );
             }
         }
         Err(error) => {

@@ -20,20 +20,15 @@ pub struct ProducerService {
 
 impl ProducerService {
     pub fn new(cfg: &KafkaConfig) -> Result<Self> {
-
-        
         let mut client = ClientConfig::new();
 
         // producer may use dedicated brokers/credentials; fall back to global config
-        let brokers = cfg
-            .producer_brokers
-            .as_ref()
-            .unwrap_or(&cfg.brokers);
+        let brokers = cfg.producer_brokers.as_ref().unwrap_or(&cfg.brokers);
 
         client.set("bootstrap.servers", brokers);
         // Distinguish producer client in broker logs and librdkafka messages
         client.set("client.id", "event-processor-producer");
-        
+
         client
             .set("enable.idempotence", "true")
             .set("acks", "all")
@@ -42,11 +37,19 @@ impl ProducerService {
             .set("message.timeout.ms", "300000");
 
         // producer-specific creds take precedence if present
-        if let Some(sec) = cfg.producer_security_protocol.as_ref().or(cfg.security_protocol.as_ref()) {
+        if let Some(sec) = cfg
+            .producer_security_protocol
+            .as_ref()
+            .or(cfg.security_protocol.as_ref())
+        {
             client.set("security.protocol", sec);
         }
 
-        if let Some(mech) = cfg.producer_sasl_mechanism.as_ref().or(cfg.sasl_mechanism.as_ref()) {
+        if let Some(mech) = cfg
+            .producer_sasl_mechanism
+            .as_ref()
+            .or(cfg.sasl_mechanism.as_ref())
+        {
             client.set("sasl.mechanisms", mech);
         }
 
@@ -61,7 +64,9 @@ impl ProducerService {
         // enable useful logging integration
         client.set_log_level(rdkafka::config::RDKafkaLogLevel::Info);
 
-        let producer = client.create().map_err(|e| anyhow!("producer create: {e}"))?;
+        let producer = client
+            .create()
+            .map_err(|e| anyhow!("producer create: {e}"))?;
 
         // topic: explicit producer_topic -> fallback to requested hard-coded "unit-events"
         let topic = cfg

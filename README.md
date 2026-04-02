@@ -8,7 +8,7 @@ Actuar como capa de procesamiento entre un broker Kafka y una base de datos de e
 
 ## Arquitectura
 
-```
+```text
 Kafka
   │
   ▼
@@ -19,7 +19,7 @@ KafkaConsumer  ──►  Dispatcher  ──►  Evaluator(es)
 ```
 
 | Componente | Descripción |
-|---|---|
+| --- | --- |
 | **KafkaConsumer** | Lee mensajes del topic configurado, los deserializa a `IncomingMessage` y los pasa al pipeline. Gestiona offsets manualmente: confirma solo mensajes procesados con éxito. |
 | **Dispatcher** | Enruta cada `IncomingMessage` a los evaluadores registrados para su `msg_class`. También corre evaluadores globales en todos los mensajes. |
 | **Evaluator** | Trait que decide si un mensaje produce eventos. Cada evaluador implementa `can_handle` y `process`. |
@@ -30,7 +30,7 @@ KafkaConsumer  ──►  Dispatcher  ──►  Evaluator(es)
 ## Evaluadores existentes
 
 | Evaluador | Clase | Alertas manejadas |
-|---|---|---|
+| --- | --- | --- |
 | `IgnitionEvaluator` | `ALERT` | `Engine ON`, `Engine OFF` |
 | `GeofenceEvaluator` | global | Mensajes con `latitude` y `longitude` presentes |
 
@@ -92,7 +92,7 @@ El evaluador aparecerá automáticamente en los logs de cada despacho.
 ### PostgreSQL
 
 | Variable | Requerida | Descripción |
-|---|---|---|
+| --- | --- | --- |
 | `DB_HOST` | ✅ | Host del servidor |
 | `DB_PORT` | ✅ | Puerto (ej. `5432`) |
 | `DB_NAME` | ✅ | Nombre de la base de datos |
@@ -103,7 +103,7 @@ El evaluador aparecerá automáticamente en los logs de cada despacho.
 ### Kafka
 
 | Variable | Requerida | Descripción |
-|---|---|---|
+| --- | --- | --- |
 | `KAFKA_BROKERS` | ✅ | Lista de brokers (`host:puerto`) |
 | `KAFKA_TOPIC` | ✅ | Topic a consumir |
 | `KAFKA_GROUP_ID` | ✅ | Consumer group ID |
@@ -117,7 +117,7 @@ El evaluador aparecerá automáticamente en los logs de cada despacho.
 ### Aplicación
 
 | Variable | Requerida | Default | Descripción |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `LOG_LEVEL` | — | `info` | Nivel de log (tracing filter) |
 | `HEALTH_BIND_ADDR` | — | `0.0.0.0:8080` | Dirección del servidor de health |
 | `BATCH_SIZE` | ✅ | — | Máx. eventos por insert batch |
@@ -152,7 +152,7 @@ cargo run
 
 ## Health check
 
-```
+```text
 GET /health
 ```
 
@@ -187,6 +187,7 @@ git push origin :refs/tags/v1.0.0
 ```
 
 El workflow realiza en orden:
+
 1. Valida que exista `Dockerfile`
 2. Corre `cargo fmt --check`, `clippy` y `cargo test`
 3. Construye y publica la imagen Docker a GHCR
