@@ -1,9 +1,9 @@
-use sqlx::postgres::{PgPoolOptions, PgQueryResult};
-use sqlx::{PgPool, Postgres, QueryBuilder, Row};
+use sqlx::postgres::PgPoolOptions;
+use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
 use crate::config::PostgresConfig;
-use crate::models::{Event, EventTypeRegistry};
+use crate::models::EventTypeRegistry;
 
 pub struct Database {
     pool: PgPool,
@@ -24,25 +24,7 @@ impl Database {
         Ok(Self { pool })
     }
 
-    pub async fn insert_events(&self, events: &[Event]) -> Result<PgQueryResult, sqlx::Error> {
-        let mut query_builder = QueryBuilder::<Postgres>::new(
-            "INSERT INTO events (id, source_type, source_id, source_message_id, unit_id, event_type_id, payload, occurred_at, source_epoch) ",
-        );
-
-        query_builder.push_values(events, |mut row, event| {
-            row.push_bind(event.id)
-                .push_bind(&event.source_type)
-                .push_bind(&event.source_id)
-                .push_bind(event.source_message_id)
-                .push_bind(event.unit_id)
-                .push_bind(event.event_type_id)
-                .push_bind(&event.payload)
-                .push_bind(event.occurred_at)
-                .push_bind(event.source_epoch);
-        });
-
-        query_builder.build().execute(&self.pool).await
-    }
+    // `insert_events` removed: events are no longer persisted to the DB.
 
     pub async fn health_check(&self) -> bool {
         sqlx::query_scalar::<_, i32>("SELECT 1")

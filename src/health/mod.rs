@@ -61,15 +61,8 @@ struct CircuitBreakerStatus {
 }
 
 impl HealthTracker {
-    pub fn mark_db_ok(&self) {
-        let mut snapshot = self.inner.lock().expect("health tracker poisoned");
-        snapshot.db_ok = true;
-    }
-
-    pub fn mark_db_error(&self) {
-        let mut snapshot = self.inner.lock().expect("health tracker poisoned");
-        snapshot.db_ok = false;
-    }
+    // DB health marking removed: events are no longer persisted to DB so these
+    // explicit setters are no longer needed. Keep kafka setters only.
 
     pub fn mark_kafka_ok(&self) {
         let mut snapshot = self.inner.lock().expect("health tracker poisoned");

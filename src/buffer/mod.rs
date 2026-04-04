@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio::time::{self, MissedTickBehavior};
-use tracing::{error, info, warn};
+use tracing::info;
 
 use crate::circuit_breaker::CircuitBreaker;
 use crate::db::Database;
@@ -69,9 +69,9 @@ pub fn spawn_buffer_writer(
 
 #[allow(clippy::too_many_arguments)]
 async fn flush_pending(
-    db: &Database,
-    db_breaker: &CircuitBreaker,
-    health: &HealthTracker,
+    _db: &Database,
+    _db_breaker: &CircuitBreaker,
+    _health: &HealthTracker,
     completion_tx: &mpsc::Sender<CompletionStatus>,
     pending: &mut Vec<PersistRequest>,
     buffered_events: &mut usize,
@@ -82,17 +82,9 @@ async fn flush_pending(
         return;
     }
 
-    if !db_breaker.allow_request() {
-        warn!(
-            pending_messages = pending.len(),
-            "database circuit breaker is open; deferring commits"
-        );
-        fail_pending(completion_tx, std::mem::take(pending)).await;
-        *buffered_events = 0;
-        health.mark_db_error();
-        return;
-    }
-
+    // Drain pending requests and produce directly to Kafka. We no longer persist
+    // events to the DB; instead we mark completions and enqueue Kafka production
+    // (best-effort).
     let drained: Vec<PersistRequest> = std::mem::take(pending);
     let event_count = drained
         .iter()
@@ -103,92 +95,66 @@ async fn flush_pending(
         .flat_map(|request| request.events.iter().cloned())
         .collect::<Vec<ModelEvent>>();
 
-    match db.insert_events(&flattened).await {
-        Ok(_) => {
-            db_breaker.record_success();
-            health.mark_db_ok();
-            info!(
-                batch_messages = drained.len(),
-                batch_events = event_count,
-                "persisted event batch"
-            );
-            for request in drained {
-                let _ = completion_tx
-                    .send(CompletionStatus {
-                        token: request.token,
-                        success: true,
-                    })
-                    .await;
-            }
+    // Signal success for each original PersistRequest so the caller can commit
+    // offsets or consider the message handled.
+    for request in drained {
+        let _ = completion_tx
+            .send(CompletionStatus {
+                token: request.token,
+                success: true,
+            })
+            .await;
+    }
 
-            // After successful DB persistence, produce events to Kafka (best-effort).
-            if let Some(producer) = producer_opt {
-                // TODO: replace dual-write with outbox pattern for guaranteed consistency
-                for ev in flattened.into_iter() {
-                    let producer = producer.clone();
-                    let lookup = event_type_lookup.clone();
-                    tokio::spawn(async move {
-                        // map model event -> kafka event
-                        let event_type = lookup
-                            .as_ref()
-                            .and_then(|map| map.get(&ev.event_type_id).cloned())
-                            .unwrap_or_else(|| ev.event_type_id.to_string());
+    // Produce to Kafka (best-effort). Keep behaviour mostly unchanged from
+    // previous flow: spawn tasks per event and log counts.
+    if let Some(producer) = producer_opt {
+        for ev in flattened.into_iter() {
+            let producer = producer.clone();
+            let lookup = event_type_lookup.clone();
+            tokio::spawn(async move {
+                let event_type = lookup
+                    .as_ref()
+                    .and_then(|map| map.get(&ev.event_type_id).cloned())
+                    .unwrap_or_else(|| ev.event_type_id.to_string());
 
-                        let mut payload = ev.payload.clone();
-                        if let serde_json::Value::Object(ref mut map) = payload {
-                            map.remove("alert");
-                            map.remove("msg_class");
-                        }
-
-                        let kafka_event = KafkaEvent {
-                            event_id: ev.id,
-                            event_type_id: ev.event_type_id,
-                            schema_version: 1,
-                            event_type,
-                            source: KafkaSource {
-                                r#type: ev.source_type.clone(),
-                                id: ev.source_id.clone(),
-                                message_id: ev.source_message_id.unwrap_or_else(Uuid::new_v4),
-                            },
-                            unit: KafkaUnit {
-                                id: ev.unit_id.unwrap_or_else(Uuid::new_v4),
-                            },
-                            source_epoch: ev.source_epoch,
-                            occurred_at: ev.occurred_at,
-                            received_at: Utc::now(),
-                            payload,
-                        };
-
-                        producer.produce_event(kafka_event).await;
-                    });
+                let mut payload = ev.payload.clone();
+                if let serde_json::Value::Object(ref mut map) = payload {
+                    map.remove("alert");
+                    map.remove("msg_class");
                 }
-                info!(
-                    kafka_produced = event_count,
-                    "enqueued events for kafka production"
-                );
-            }
+
+                let kafka_event = KafkaEvent {
+                    event_id: ev.id,
+                    event_type_id: ev.event_type_id,
+                    schema_version: 1,
+                    event_type,
+                    source: KafkaSource {
+                        r#type: ev.source_type.clone(),
+                        id: ev.source_id.clone(),
+                        message_id: ev.source_message_id.unwrap_or_else(Uuid::new_v4),
+                    },
+                    unit: KafkaUnit {
+                        id: ev.unit_id.unwrap_or_else(Uuid::new_v4),
+                    },
+                    source_epoch: ev.source_epoch,
+                    occurred_at: ev.occurred_at,
+                    received_at: Utc::now(),
+                    payload,
+                };
+
+                producer.produce_event(kafka_event).await;
+            });
         }
-        Err(error) => {
-            db_breaker.record_failure();
-            health.mark_db_error();
-            error!(error = %error, batch_messages = drained.len(), batch_events = event_count, "failed to persist event batch");
-            fail_pending(completion_tx, drained).await;
-        }
+
+        info!(
+            kafka_produced = event_count,
+            "enqueued events for kafka production"
+        );
     }
 
     *buffered_events = 0;
 }
 
-async fn fail_pending(
-    completion_tx: &mpsc::Sender<CompletionStatus>,
-    requests: Vec<PersistRequest>,
-) {
-    for request in requests {
-        let _ = completion_tx
-            .send(CompletionStatus {
-                token: request.token,
-                success: false,
-            })
-            .await;
-    }
-}
+// `fail_pending` removed: we no longer persist to DB, so marking failures
+// for deferred DB writes is not applicable.
