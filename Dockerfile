@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM rust:1.88-bookworm AS builder
+FROM rust:1.92-bookworm AS base
 
 WORKDIR /app
 
@@ -16,6 +16,17 @@ RUN apt-get update \
         libsasl2-dev \
         protobuf-compiler \
     && rm -rf /var/lib/apt/lists/*
+
+RUN cargo install cargo-chef --locked
+
+FROM base AS planner
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM base AS builder
+COPY --from=planner /app/recipe.json recipe.json
+RUN cargo chef cook --release --locked --recipe-path recipe.json
 
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
