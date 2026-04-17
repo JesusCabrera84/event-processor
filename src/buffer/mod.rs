@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio::time::{self, MissedTickBehavior};
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::circuit_breaker::CircuitBreaker;
 use crate::db::Database;
@@ -135,7 +135,14 @@ async fn flush_pending(
                         message_id: ev.source_message_id.unwrap_or_else(Uuid::new_v4),
                     },
                     unit: KafkaUnit {
-                        id: ev.unit_id.unwrap_or_else(Uuid::new_v4),
+                        id: ev.unit_id.unwrap_or_else(|| {
+                            warn!(
+                                event_id = %ev.id,
+                                source_id = %ev.source_id,
+                                "missing unit_id while building kafka event; using nil UUID"
+                            );
+                            Uuid::nil()
+                        }),
                     },
                     source_epoch: ev.source_epoch,
                     occurred_at: ev.occurred_at,

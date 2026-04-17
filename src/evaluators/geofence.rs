@@ -4,6 +4,7 @@ use std::sync::Arc;
 use dashmap::DashMap;
 use futures::future::BoxFuture;
 use h3o::{LatLng, Resolution};
+use tracing::warn;
 use uuid::Uuid;
 
 use crate::evaluators::{Evaluator, EvaluatorContext};
@@ -153,15 +154,32 @@ impl Evaluator for GeofenceEvaluator {
     fn process<'a>(
         &'a self,
         msg: &'a IncomingMessage,
-        _context: &'a EvaluatorContext,
+        context: &'a EvaluatorContext,
     ) -> BoxFuture<'a, Option<Vec<Event>>> {
         Box::pin(async move {
             let latitude = msg.latitude?;
             let longitude = msg.longitude?;
 
+            let resolved_unit_id = if let Some(unit_id) = msg.unit_id {
+                Some(unit_id)
+            } else if let Some(device_id) = msg.device_id.as_deref() {
+                match context.unit_devices().resolve_by_device_id(device_id).await {
+                    Ok(unit_id) => unit_id,
+                    Err(error) => {
+                        warn!(
+                            device_id,
+                            error = %error,
+                            "failed to resolve unit_id for device_id in geofence evaluator"
+                        );
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+
             // Clave de estado: preferimos unit_id, si no device_id, si no UUID del mensaje
-            let unit_key = msg
-                .unit_id
+            let unit_key = resolved_unit_id
                 .map(|u| u.to_string())
                 .or_else(|| msg.device_id.clone())
                 .unwrap_or_else(|| "unknown".to_string());
@@ -192,7 +210,7 @@ impl Evaluator for GeofenceEvaluator {
                         source_type: "device_message".to_string(),
                         source_id: source_id.clone(),
                         source_message_id: msg.message_id,
-                        unit_id: msg.unit_id,
+                        unit_id: resolved_unit_id,
                         event_type_id: enter_type_id,
                         payload: msg.payload_with_geofence(*geofence_id),
                         occurred_at,
@@ -208,7 +226,7 @@ impl Evaluator for GeofenceEvaluator {
                         source_type: "device_message".to_string(),
                         source_id: source_id.clone(),
                         source_message_id: msg.message_id,
-                        unit_id: msg.unit_id,
+                        unit_id: resolved_unit_id,
                         event_type_id: exit_type_id,
                         payload: msg.payload_with_geofence(*geofence_id),
                         occurred_at,
