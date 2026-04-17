@@ -8,7 +8,7 @@ use futures::future::BoxFuture;
 use crate::models::{Event, IncomingMessage};
 use crate::unit_devices::UnitDeviceResolver;
 
-pub use geofence::{GeofenceEvaluator, GeofenceStore};
+pub use geofence::{GeofenceEvaluator, GeofenceStateTracker, GeofenceStore};
 pub use ignition::IgnitionEvaluator;
 
 pub struct EvaluatorContext {

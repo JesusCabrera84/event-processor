@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use dashmap::DashMap;
@@ -91,16 +92,50 @@ impl Clone for GeofenceStore {
     }
 }
 
+/// Mantiene el estado de qué geofences contiene cada unidad.
+/// Clave: unit_id (como String para soportar device_id cuando unit_id es None).
+/// Valor: conjunto de geofence_ids en los que estaba la última vez.
+#[derive(Clone, Default)]
+pub struct GeofenceStateTracker {
+    state: Arc<DashMap<String, HashSet<Uuid>>>,
+}
+
+impl GeofenceStateTracker {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Actualiza el estado de la unidad y devuelve (entered, exited).
+    pub fn update(&self, unit_key: &str, current: HashSet<Uuid>) -> (Vec<Uuid>, Vec<Uuid>) {
+        let mut entry = self.state.entry(unit_key.to_string()).or_default();
+        let previous = entry.value().clone();
+
+        let entered: Vec<Uuid> = current.difference(&previous).copied().collect();
+        let exited: Vec<Uuid> = previous.difference(&current).copied().collect();
+
+        *entry = current;
+        (entered, exited)
+    }
+}
+
 pub struct GeofenceEvaluator {
-    event_type_id: Option<Uuid>,
+    enter_event_type_id: Option<Uuid>,
+    exit_event_type_id: Option<Uuid>,
     store: GeofenceStore,
+    state_tracker: GeofenceStateTracker,
 }
 
 impl GeofenceEvaluator {
-    pub fn new(registry: &EventTypeRegistry, store: GeofenceStore) -> Self {
+    pub fn new(
+        registry: &EventTypeRegistry,
+        store: GeofenceStore,
+        state_tracker: GeofenceStateTracker,
+    ) -> Self {
         Self {
-            event_type_id: registry.get("Geofence").copied(),
+            enter_event_type_id: registry.get("geofence_enter").copied(),
+            exit_event_type_id: registry.get("geofence_exit").copied(),
             store,
+            state_tracker,
         }
     }
 }
@@ -121,34 +156,72 @@ impl Evaluator for GeofenceEvaluator {
         _context: &'a EvaluatorContext,
     ) -> BoxFuture<'a, Option<Vec<Event>>> {
         Box::pin(async move {
-            let event_type_id = self.event_type_id?;
             let latitude = msg.latitude?;
             let longitude = msg.longitude?;
 
-            // Buscamos qué geofences contienen este punto
-            let matching_geofences = self.store.find_geofences_for_point(latitude, longitude);
+            // Clave de estado: preferimos unit_id, si no device_id, si no UUID del mensaje
+            let unit_key = msg
+                .unit_id
+                .map(|u| u.to_string())
+                .or_else(|| msg.device_id.clone())
+                .unwrap_or_else(|| "unknown".to_string());
 
-            if matching_geofences.is_empty() {
+            // Geofences que contienen el punto actual
+            let current_ids: HashSet<Uuid> = self
+                .store
+                .find_geofences_for_point(latitude, longitude)
+                .into_iter()
+                .collect();
+
+            // Calcular entradas y salidas respecto al estado anterior
+            let (entered, exited) = self.state_tracker.update(&unit_key, current_ids);
+
+            if entered.is_empty() && exited.is_empty() {
                 return None;
             }
 
-            // Generamos un evento por cada geofence que contiene el punto
-            let events = matching_geofences
-                .into_iter()
-                .map(|geofence_id| Event {
-                    id: Uuid::new_v4(),
-                    source_type: "device_message".to_string(),
-                    source_id: msg.device_source_id(),
-                    source_message_id: msg.message_id,
-                    unit_id: msg.unit_id,
-                    event_type_id,
-                    payload: msg.payload_with_geofence(geofence_id),
-                    occurred_at: msg.event_occurred_at(),
-                    source_epoch: msg.source_epoch(),
-                })
-                .collect();
+            let occurred_at = msg.event_occurred_at();
+            let source_epoch = msg.source_epoch();
+            let source_id = msg.device_source_id();
+            let mut events: Vec<Event> = Vec::new();
 
-            Some(events)
+            if let Some(enter_type_id) = self.enter_event_type_id {
+                for geofence_id in &entered {
+                    events.push(Event {
+                        id: Uuid::new_v4(),
+                        source_type: "device_message".to_string(),
+                        source_id: source_id.clone(),
+                        source_message_id: msg.message_id,
+                        unit_id: msg.unit_id,
+                        event_type_id: enter_type_id,
+                        payload: msg.payload_with_geofence(*geofence_id),
+                        occurred_at,
+                        source_epoch,
+                    });
+                }
+            }
+
+            if let Some(exit_type_id) = self.exit_event_type_id {
+                for geofence_id in &exited {
+                    events.push(Event {
+                        id: Uuid::new_v4(),
+                        source_type: "device_message".to_string(),
+                        source_id: source_id.clone(),
+                        source_message_id: msg.message_id,
+                        unit_id: msg.unit_id,
+                        event_type_id: exit_type_id,
+                        payload: msg.payload_with_geofence(*geofence_id),
+                        occurred_at,
+                        source_epoch,
+                    });
+                }
+            }
+
+            if events.is_empty() {
+                None
+            } else {
+                Some(events)
+            }
         })
     }
 }

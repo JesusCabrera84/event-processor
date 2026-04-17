@@ -57,7 +57,7 @@ Garantías y limitaciones:
 | Evaluador | Clase | Alertas manejadas |
 | --- | --- | --- |
 | `IgnitionEvaluator` | `ALERT` | `Engine ON`, `Engine OFF` |
-| `GeofenceEvaluator` | global | Mensajes con `latitude` y `longitude` presentes |
+| `GeofenceEvaluator` | global | Mensajes con `latitude` y `longitude` presentes — emite `Geofence Enter` / `Geofence Exit` por cambio de estado |
 
 ### Ejemplos de eventos generados
 
@@ -150,7 +150,7 @@ Garantías y limitaciones:
 }
 ```
 
-**Evento generado** (geofence_id como ejemplo):
+**Evento generado — entrada a geocerca** (`event_type_id` apunta a `"Geofence Enter"`):
 
 ```json
 {
@@ -173,11 +173,11 @@ Garantías y limitaciones:
 }
 ```
 
-**Nota**: Si el mismo mensaje intersecta múltiples geocercas activas, se genera un evento por cada una con diferentes `geofence_id` en el payload (y distinto `id` de evento).
+**Nota**: Si el mismo mensaje intersecta múltiples geocercas activas se genera un evento (entrada o salida) por cada una con diferente `geofence_id` en el payload (y distinto `id` de evento). Si la unidad ya estaba dentro de una geocerca y sigue dentro, **no** se vuelve a generar evento.
 
 ### Propósito
 
-Detectar cuándo un dispositivo entra o está dentro de una geocerca. Para cada mensaje con coordenadas, el evaluador:
+Detectar cuándo un dispositivo **entra** o **sale** de una geocerca. El evaluador mantiene en memoria el estado previo por unidad y solo emite eventos en los **cambios de estado**. Para cada mensaje con coordenadas, el evaluador:
 
 1. Convierte el punto (lat/lng) a un índice H3
 2. Busca qué geocercas contienen ese índice
@@ -247,11 +247,11 @@ GeofenceEvaluator::process()
          │  └─ Compara índice H3 contra h3_indices de cada una
          │  └─ Retorna Vec<geofence_id> con coincidencias
          │
-         ├─ Por cada geofence_id encontrado:
-         │  └─ Crea Event con event_type_id = "Geofence"
-         │  └─ Incluye geofence_id en el payload
+         ├─ Compara contra estado previo de la unidad (GeofenceStateTracker)
+         │  ├─ Nuevas geocercas → eventos "Geofence Enter"
+         │  └─ Geocercas abandonadas → eventos "Geofence Exit"
          │
-         └─ Retorna Option<Vec<Event>> (None si no hay coincidencias)
+         └─ Retorna Option<Vec<Event>> (None si no hubo cambios de estado)
 ```
 
 ### Datos de entrada: tablas PostgreSQL
@@ -377,7 +377,9 @@ Proporciona SQL o CSV para poblar `event_types` y `unit_devices`. Ejemplo mínim
 -- event_types
 INSERT INTO event_types (id, code) VALUES
     ('00000000-0000-0000-0000-000000000001', 'Engine ON'),
-    ('00000000-0000-0000-0000-000000000002', 'Engine OFF');
+    ('00000000-0000-0000-0000-000000000002', 'Engine OFF'),
+    ('00000000-0000-0000-0000-000000000003', 'geofence_enter'),
+    ('00000000-0000-0000-0000-000000000004', 'geofence_exit');
 
 -- unit_devices
 INSERT INTO unit_devices (unit_id, device_id) VALUES

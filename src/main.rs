@@ -25,7 +25,9 @@ use crate::circuit_breaker::CircuitBreaker;
 use crate::config::AppConfig;
 use crate::db::Database;
 use crate::dispatcher::{spawn_evaluation_pipeline, Dispatcher};
-use crate::evaluators::{EvaluatorContext, GeofenceEvaluator, GeofenceStore, IgnitionEvaluator};
+use crate::evaluators::{
+    EvaluatorContext, GeofenceEvaluator, GeofenceStateTracker, GeofenceStore, IgnitionEvaluator,
+};
 use crate::health::{serve_health, HealthTracker};
 use crate::kafka::{run_consumer, run_geofence_updates_consumer};
 use crate::models::{CompletionStatus, PersistRequest, ProcessEnvelope};
@@ -46,6 +48,7 @@ async fn main() -> Result<()> {
     tracing::info!(count = geofences.len(), "active geofences loaded");
 
     let geofence_store = GeofenceStore::new();
+    let geofence_state_tracker = GeofenceStateTracker::new();
     geofence_store.load(geofences);
 
     // invert registry for id -> code lookup used when producing events to Kafka
@@ -96,6 +99,7 @@ async fn main() -> Result<()> {
             .register_global(Arc::new(GeofenceEvaluator::new(
                 &event_types,
                 geofence_store.clone(),
+                geofence_state_tracker,
             )))
             .build(),
     );
