@@ -40,7 +40,6 @@ async fn main() -> Result<()> {
     let config = AppConfig::load()?;
     init_tracing(&config.app.log_level)?;
     startup::print_logo();
-    startup::print_logo_plain();
     startup::log_service_started(
         &config.app.log_level,
         &config.app.health_bind_addr.to_string(),

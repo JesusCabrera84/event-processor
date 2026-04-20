@@ -21,11 +21,6 @@ pub fn print_logo() {
     println!();
     println!();
 }
-pub fn print_logo_plain() {
-    const LOGO_PLAIN: &str = include_str!("../assets/geminis-labs-logo_plain.txt");
-
-    println!("\n{LOGO_PLAIN}\n");
-}
 
 pub fn log_service_started(log_level: &str, health_bind_addr: &str) {
     let environment = std::env::var("APP_ENV")

@@ -238,7 +238,19 @@ pub async fn run_geofence_updates_consumer(
                     Ok(message) => {
                         breaker.record_success();
                         health.mark_kafka_ok();
-                        handle_geofence_update_message(message, &store);
+                        handle_geofence_update_message(&message, &store);
+
+                        if let Err(error) = consumer.commit_message(&message, CommitMode::Sync) {
+                            breaker.record_failure();
+                            health.mark_kafka_error();
+                            error!(
+                                error = %error,
+                                topic = message.topic(),
+                                partition = message.partition(),
+                                offset = message.offset(),
+                                "failed to commit geofence update offset"
+                            );
+                        }
                     }
                     Err(error) => {
                         breaker.record_failure();
@@ -292,7 +304,7 @@ fn build_consumer(
 }
 
 fn handle_geofence_update_message(
-    message: rdkafka::message::BorrowedMessage<'_>,
+    message: &rdkafka::message::BorrowedMessage<'_>,
     store: &GeofenceStore,
 ) {
     let payload = match message.payload_view::<str>() {
@@ -575,7 +587,7 @@ async fn mark_and_commit(
             return;
         }
 
-        if let Err(error) = consumer.commit(&topic_partition_list, CommitMode::Async) {
+        if let Err(error) = consumer.commit(&topic_partition_list, CommitMode::Sync) {
             breaker.record_failure();
             health.mark_kafka_error();
             error!(error = %error, topic = completion.token.topic, partition = completion.token.partition, offset = next_offset, "failed to commit processed offsets");
