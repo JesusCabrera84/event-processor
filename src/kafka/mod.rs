@@ -509,14 +509,14 @@ async fn handle_message(
                 topic = message.topic(),
                 partition = message.partition(),
                 offset,
-                "message parsing failed"
+                "message parsing failed; skipping message"
             );
             mark_and_commit(
                 consumer,
                 partition_states,
                 CompletionStatus {
                     token,
-                    success: false,
+                    success: true,
                 },
                 breaker,
                 health,
