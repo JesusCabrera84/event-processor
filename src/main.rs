@@ -9,6 +9,7 @@ mod kafka;
 mod models;
 mod processors;
 mod serializers;
+mod startup;
 mod unit_devices;
 
 use std::sync::Arc;
@@ -38,6 +39,14 @@ use crate::unit_devices::UnitDeviceResolver;
 async fn main() -> Result<()> {
     let config = AppConfig::load()?;
     init_tracing(&config.app.log_level)?;
+    startup::print_logo();
+    startup::print_logo_plain();
+    startup::log_service_started(
+        &config.app.log_level,
+        &config.app.health_bind_addr.to_string(),
+    );
+
+    info!("initializing components");
 
     let db = Arc::new(Database::connect(&config.postgres).await?);
 
